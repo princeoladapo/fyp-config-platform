@@ -1,0 +1,41 @@
+# Validation rules, in the format described in Chapter Three, Section 3.6.6.
+# Three kinds of condition are supported:
+#   - fixed:      ">= 3", "== true", "startsWith(...)"  (checked in each listed environment)
+#   - same:       the value must match across the listed environments
+#   - relational: "production >= staging"               (compares two environments)
+# Anything with no rule (for example LOG_LEVEL) is allowed to differ.
+
+rules:
+  - rule: production-minimum-replicas
+    resource: Deployment
+    property: spec.replicas
+    environments: [production]
+    condition: ">= 3"
+    severity: high
+
+  - rule: approved-image-registry
+    resource: Deployment
+    property: spec.template.spec.containers[*].image
+    environments: [development, staging, production]
+    condition: "startsWith(registry.example.com/)"
+    severity: high
+
+  - rule: production-replicas-not-below-staging
+    resource: Deployment
+    property: spec.replicas
+    condition: "production >= staging"
+    severity: medium
+
+  - rule: image-matches-between-staging-and-production
+    resource: Deployment
+    property: spec.template.spec.containers[*].image
+    environments: [staging, production]
+    condition: same
+    severity: high
+
+  - rule: run-as-non-root-consistent
+    resource: Deployment
+    property: spec.template.spec.securityContext.runAsNonRoot
+    environments: [staging, production]
+    condition: same
+    severity: high
