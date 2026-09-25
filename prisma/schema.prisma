@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Severity {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum RunStatus {
+  RUNNING
+  CONSISTENT
+  VIOLATIONS_FOUND
+  FAILED
+}
+
+enum Representation {
+  DECLARED
+  LIVE
+}
+
+model Environment {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  gitDirectory String    @map("git_directory")
+  k8sNamespace String    @map("k8s_namespace")
+  findings     Finding[]
+
+  @@map("environments")
+}
+
+model Rule {
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  resource     String
+  property     String
+  environments String[]
+  condition    String
+  severity     Severity
+  enabled      Boolean   @default(true)
+  findings     Finding[]
+
+  @@map("rules")
+}
+
+model Template {
+  id               Int       @id @default(autoincrement())
+  name             String    @unique
+  environmentScope String    @map("environment_scope")
+  content          Json
+  findings         Finding[]
+
+  @@map("templates")
+}
+
+model ValidationRun {
+  id          Int       @id @default(autoincrement())
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  status      RunStatus @default(RUNNING)
+  findings    Finding[]
+
+  @@map("validation_runs")
+}
+
+model Finding {
+  id             Int            @id @default(autoincrement())
+  runId          Int            @map("run_id")
+  environmentId  Int            @map("environment_id")
+  ruleId         Int?           @map("rule_id")
+  templateId     Int?           @map("template_id")
+  resourceKind   String         @map("resource_kind")
+  resourceName   String         @map("resource_name")
+  property       String
+  expected       String
+  observed       String
+  severity       Severity
+  representation Representation
+
+  run         ValidationRun @relation(fields: [runId], references: [id])
+  environment Environment   @relation(fields: [environmentId], references: [id])
+  rule        Rule?         @relation(fields: [ruleId], references: [id])
+  template    Template?     @relation(fields: [templateId], references: [id])
+
+  @@map("findings")
+}
