@@ -1,0 +1,16 @@
+# Environment mapping (Chapter Three, Section 3.6.2).
+# repository: path to the Git repository ("." means this project folder)
+# ref: which commit or branch to read declared configuration from
+repository: .
+ref: HEAD
+
+environments:
+  - name: development
+    gitDirectory: sample-config/environments/development
+    namespace: development
+  - name: staging
+    gitDirectory: sample-config/environments/staging
+    namespace: staging
+  - name: production
+    gitDirectory: sample-config/environments/production
+    namespace: production

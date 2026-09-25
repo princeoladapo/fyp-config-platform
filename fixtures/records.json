@@ -13,7 +13,7 @@
 
   { "environment": "production", "representation": "declared", "kind": "Deployment", "name": "web-app", "property": "spec.replicas", "value": 3 },
   { "environment": "production", "representation": "declared", "kind": "Deployment", "name": "web-app", "property": "spec.template.spec.containers[0].image", "value": "registry.example.com/web-app:v1" },
-  { "environment": "production", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.replicas", "value": 3 },
+  { "environment": "production", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.replicas", "value": 1 },
   { "environment": "production", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.template.spec.containers[0].image", "value": "registry.example.com/web-app:v1" },
 
   { "environment": "development", "representation": "declared", "kind": "ConfigMap", "name": "web-config", "property": "data.LOG_LEVEL", "value": "debug" },

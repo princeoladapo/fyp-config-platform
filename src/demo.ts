@@ -1,23 +1,26 @@
-// Runs the rules engine against the sample records and prints the findings.
-// Usage: npm run demo
+// Runs a full validation: declared configuration from Git (real),
+// live configuration from fixtures (until the Kubernetes connector exists).
+// Usage: npx tsx src/demo.ts
 
 import { readFileSync } from 'fs';
 import { parse } from 'yaml';
+import { loadConfig } from './config';
+import { readDeclaredConfiguration } from './connectors/gitConnector';
 import { evaluate } from './engine/rulesEngine';
 import { NormalizedRecord, RuleDefinition } from './engine/types';
 
-const ENVIRONMENTS = ['development', 'staging', 'production'];
+const config = loadConfig('config/environments.yaml');
+const environmentNames = config.environments.map((e) => e.name);
 
-const records: NormalizedRecord[] = JSON.parse(
-  readFileSync('fixtures/records.json', 'utf8'),
-);
-const rules: RuleDefinition[] = parse(
-  readFileSync('rules/rules.yaml', 'utf8'),
-).rules;
+const declared = readDeclaredConfiguration(config.repository, config.ref, config.environments);
+const live: NormalizedRecord[] = JSON.parse(readFileSync('fixtures/live-records.json', 'utf8'));
+const rules: RuleDefinition[] = parse(readFileSync('rules/rules.yaml', 'utf8')).rules;
 
-const findings = evaluate(records, rules, ENVIRONMENTS);
+const findings = evaluate([...declared, ...live], rules, environmentNames);
 
-console.log(`Checked ${records.length} records against ${rules.length} rules.\n`);
+console.log(`Read ${declared.length} declared records from Git (${config.ref}).`);
+console.log(`Read ${live.length} live records from fixtures.`);
+console.log(`Checked against ${rules.length} rules.\n`);
 
 if (findings.length === 0) {
   console.log('CONSISTENT: no violations found.');

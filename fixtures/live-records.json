@@ -1,0 +1,9 @@
+[
+  { "environment": "development", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.replicas", "value": 1 },
+  { "environment": "development", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.template.spec.containers[0].image", "value": "docker.io/library/web-app:dev" },
+  { "environment": "staging", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.replicas", "value": 2 },
+  { "environment": "staging", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.template.spec.containers[0].image", "value": "registry.example.com/web-app:v2" },
+  { "environment": "staging", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.template.spec.securityContext.runAsNonRoot", "value": true },
+  { "environment": "production", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.replicas", "value": 1 },
+  { "environment": "production", "representation": "live", "kind": "Deployment", "name": "web-app", "property": "spec.template.spec.containers[0].image", "value": "registry.example.com/web-app:v1" }
+]
