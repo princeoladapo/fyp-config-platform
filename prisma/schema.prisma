@@ -49,16 +49,6 @@ model Rule {
   @@map("rules")
 }
 
-model Template {
-  id               Int       @id @default(autoincrement())
-  name             String    @unique
-  environmentScope String    @map("environment_scope")
-  content          Json
-  findings         Finding[]
-
-  @@map("templates")
-}
-
 model ValidationRun {
   id          Int       @id @default(autoincrement())
   startedAt   DateTime  @default(now()) @map("started_at")
@@ -73,8 +63,7 @@ model Finding {
   id             Int            @id @default(autoincrement())
   runId          Int            @map("run_id")
   environmentId  Int            @map("environment_id")
-  ruleId         Int?           @map("rule_id")
-  templateId     Int?           @map("template_id")
+  ruleId         Int            @map("rule_id")
   resourceKind   String         @map("resource_kind")
   resourceName   String         @map("resource_name")
   property       String
@@ -85,8 +74,7 @@ model Finding {
 
   run         ValidationRun @relation(fields: [runId], references: [id])
   environment Environment   @relation(fields: [environmentId], references: [id])
-  rule        Rule?         @relation(fields: [ruleId], references: [id])
-  template    Template?     @relation(fields: [templateId], references: [id])
+  rule        Rule          @relation(fields: [ruleId], references: [id])
 
   @@map("findings")
 }

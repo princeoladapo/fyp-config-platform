@@ -33,7 +33,7 @@ which representation it was observed in.
   1. Rules engine on sample data (DONE)
   2. Git connector (DONE)
   3. Kubernetes connector (NEXT)
-  4. Rule and template definition stored in the database
+  4. Rules stored in the database
   5. Reporting interface and persistence of findings
 - 3.6.2 Environment mapping: one Git directory per environment, paired with the namespace of the
   same name. Held in config/environments.yaml for now; the database `environments` table later.
@@ -91,10 +91,10 @@ changes before running, or the connector will not see them.
   The client is generated to `generated/prisma` and needs the `@prisma/adapter-pg` driver adapter
   (`new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`) and `dotenv`.
 - Stay on Prisma 7. Do not upgrade to Prisma 8 (release candidate, breaking changes).
-- Tables: environments, rules, templates, validation_runs, findings. Migration `init` applied.
-- The schema adds three things the report's ERD (Figure 3.4) does not show yet; the report needs
-  updating to match: `rules.environments`, `findings.resource_kind`, and `findings.rule_id` is
-  nullable (a finding can come from a template instead of a rule).
+- Tables: environments, rules, validation_runs, findings. Migrations `init` and `drop_templates`
+  applied. Every finding references a rule (`findings.rule_id` is required).
+- The schema adds two columns the report's ERD (Figure 3.4) does not show yet; the report needs
+  updating to match: `rules.environments` and `findings.resource_kind`.
 
 ## Next step: increment three, Kubernetes connector
 
