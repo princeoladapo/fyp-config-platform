@@ -93,8 +93,6 @@ changes before running, or the connector will not see them.
 - Stay on Prisma 7. Do not upgrade to Prisma 8 (release candidate, breaking changes).
 - Tables: environments, rules, validation_runs, findings. Migrations `init` and `drop_templates`
   applied. Every finding references a rule (`findings.rule_id` is required).
-- The schema adds two columns the report's ERD (Figure 3.4) does not show yet; the report needs
-  updating to match: `rules.environments` and `findings.resource_kind`.
 
 ## Next step: increment three, Kubernetes connector
 
