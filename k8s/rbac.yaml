@@ -1,0 +1,104 @@
+# Read-only cluster access for the platform (Chapter Three, Section 3.6.8).
+#
+# One ServiceAccount, kept in its own namespace so the platform's identity does
+# not belong to any environment it checks. In each environment namespace a Role
+# allows only get and list on the three resource kinds in scope, and a
+# RoleBinding grants that Role to the ServiceAccount. Roles (not ClusterRoles)
+# keep the permissions inside these three namespaces.
+#
+# Apply with: kubectl apply -f k8s/rbac.yaml --context kind-fyp-cluster
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: config-validator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: config-validator
+  namespace: config-validator
+---
+# development
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: config-validator-read
+  namespace: development
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: config-validator-read
+  namespace: development
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: config-validator-read
+subjects:
+  - kind: ServiceAccount
+    name: config-validator
+    namespace: config-validator
+---
+# staging
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: config-validator-read
+  namespace: staging
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: config-validator-read
+  namespace: staging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: config-validator-read
+subjects:
+  - kind: ServiceAccount
+    name: config-validator
+    namespace: config-validator
+---
+# production
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: config-validator-read
+  namespace: production
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: config-validator-read
+  namespace: production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: config-validator-read
+subjects:
+  - kind: ServiceAccount
+    name: config-validator
+    namespace: config-validator

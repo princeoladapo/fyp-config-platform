@@ -1,10 +1,12 @@
 # Environment mapping (Chapter Three, Section 3.6.2).
 # repository: path to the Git repository ("." means this project folder)
 # ref: which commit or branch to read declared configuration from
-# kubeContext: which kubeconfig context to read live configuration from
+# kubeContext: which kubeconfig context to read live configuration from.
+#   fyp-readonly uses the config-validator service account (k8s/rbac.yaml),
+#   which may only get and list Deployments, Services and ConfigMaps.
 repository: .
 ref: HEAD
-kubeContext: kind-fyp-cluster
+kubeContext: fyp-readonly
 
 environments:
   - name: development
