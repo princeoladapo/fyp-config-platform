@@ -32,8 +32,8 @@ which representation it was observed in.
 - 3.2 Incremental model. Increments in order:
   1. Rules engine on sample data (DONE)
   2. Git connector (DONE)
-  3. Kubernetes connector (NEXT)
-  4. Rules stored in the database
+  3. Kubernetes connector (DONE)
+  4. Rules stored in the database (NEXT)
   5. Reporting interface and persistence of findings
 - 3.6.2 Environment mapping: one Git directory per environment, paired with the namespace of the
   same name. Held in config/environments.yaml for now; the database `environments` table later.
@@ -60,16 +60,25 @@ src/engine/types.ts            shared types (NormalizedRecord, RuleDefinition, E
 src/engine/rulesEngine.ts      evaluate(records, rules, environments) -> findings
 src/normalization/normalize.ts normalizeResource(resource, env, representation) -> records
 src/connectors/gitConnector.ts reads committed YAML per environment (default ref HEAD)
+src/connectors/k8sConnector.ts reads live Deployments, Services, ConfigMaps per namespace
 src/config.ts                  loads config/environments.yaml
 src/demo.ts                    runs a full validation and prints findings
-config/environments.yaml       environment mapping
+config/environments.yaml       environment mapping and kubeContext (fyp-readonly)
 rules/rules.yaml               validation rules
 sample-config/environments/*/  sample manifests for development, staging, production
-fixtures/live-records.json     FAKE live data, to be replaced by the Kubernetes connector
-prisma/schema.prisma           database schema (5 tables, see below)
+k8s/rbac.yaml                  read-only service account, Roles and RoleBindings (3.6.8)
+prisma/schema.prisma           database schema (4 tables, see below)
+tsconfig.json                  strict type checking only; tsx runs the code
 ```
 
-Run the demo with: `npx tsx src/demo.ts` (expected today: 8 violations).
+Run the demo with: `npx tsx src/demo.ts`. Baseline: **zero findings** (declared and live both
+match the sample manifests). Any finding now means drift was introduced.
+
+Type check with: `npx tsc --noEmit` (should report nothing).
+
+Kubernetes connector details: it restores the `kind` field that list responses omit, skips the
+auto-created `kube-root-ca.crt` ConfigMap, and keeps server-defaulted fields (strategy,
+imagePullPolicy, etc.) because rules only check the properties they name.
 
 Important: the Git connector reads what is **committed**, not unsaved edits. Commit manifest
 changes before running, or the connector will not see them.
@@ -77,10 +86,40 @@ changes before running, or the connector will not see them.
 ## Local environment (Windows 11 + WSL2 + Docker Desktop)
 
 - Node v22, Git 2.42, kind v0.33, kubectl v1.36.
-- kind cluster `fyp-cluster` (kubectl context `kind-fyp-cluster`), namespaces `development`,
-  `staging`, `production`. Each runs `web-app` (nginx) with 1, 2 and 3 replicas.
-  Note: the live cluster currently runs plain `nginx` images, not the sample manifests. Applying
-  the sample manifests to the cluster is part of increment three.
+- kind cluster `fyp-cluster` (admin kubectl context `kind-fyp-cluster`), namespaces
+  `development`, `staging`, `production`. Each runs the sample manifests: `web-app` with 1, 2 and
+  3 replicas, a `web-app` Service, and a `web-config` ConfigMap.
+- The images `registry.example.com/web-app:dev` and `:v2` are local copies of
+  `nginxinc/nginx-unprivileged`, which runs as a non-root user and listens on port **8080**
+  (containerPort and Service targetPort are 8080; the Service port is 80). The registry does
+  not exist; the images are loaded straight into kind, and imagePullPolicy defaults to
+  IfNotPresent because the tags are not `latest`.
+- Loading images into kind: `kind load docker-image` fails on Docker Desktop with
+  `content digest ... not found` (multi-platform images under the containerd image store).
+  Export only the amd64 build and load the archive instead:
+  ```
+  docker save --platform linux/amd64 -o web-app-images.tar registry.example.com/web-app:dev registry.example.com/web-app:v2
+  kind load image-archive web-app-images.tar --name fyp-cluster
+  del web-app-images.tar
+  ```
+- Read-only access (3.6.8): `k8s/rbac.yaml` creates ServiceAccount `config-validator` in its own
+  namespace `config-validator`, and in each environment namespace a Role `config-validator-read`
+  (only `get` and `list` on deployments, services, configmaps) with a RoleBinding to that
+  account. The platform reads the cluster through kubeconfig context `fyp-readonly`, which uses
+  the account's token. Verified with `kubectl auth can-i ... --context fyp-readonly`: it can get
+  and list the three kinds, and cannot create, update, patch or delete them, read Secrets, or
+  read other namespaces.
+- The token is stored in the local kubeconfig (`%USERPROFILE%\.kube\config`, or the file named
+  by the `KUBECONFIG` environment variable), never in the repository or database. It expires
+  after 30 days (current one: 4 December 2026). If the demo reports `Unauthorized`, renew it in
+  cmd:
+  ```
+  for /f %t in ('kubectl create token config-validator -n config-validator --duration=720h --context kind-fyp-cluster') do @kubectl config set-credentials config-validator --token=%t
+  ```
+- If the cluster is ever recreated: create the namespaces, load the images, apply each
+  `sample-config/environments/<env>/web-app.yaml` with `-n <env>`, apply `k8s/rbac.yaml`, then
+  create the token and the context
+  (`kubectl config set-context fyp-readonly --cluster=kind-fyp-cluster --user=config-validator`).
 - PostgreSQL in Docker container `fyp-postgres`, database `fyp_config_platform`, port 5432.
   Connection string is in `.env` (DATABASE_URL).
 - If Docker Desktop was closed, start it first; the cluster and database run inside it.
@@ -94,23 +133,19 @@ changes before running, or the connector will not see them.
 - Tables: environments, rules, validation_runs, findings. Migrations `init` and `drop_templates`
   applied. Every finding references a rule (`findings.rule_id` is required).
 
-## Next step: increment three, Kubernetes connector
+## Next step: increment four, rules stored in the database
 
-- Use the official client `@kubernetes/client-node`.
-- For each mapped environment, list Deployments, Services and ConfigMaps in its namespace, pass
-  each through `normalizeResource(..., 'live')`, and replace fixtures/live-records.json in demo.ts.
-- Watch for server-defaulted fields in live objects (e.g. strategy, imagePullPolicy,
-  terminationMessagePath) and the auto-created `kube-root-ca.crt` ConfigMap in every namespace.
-  These appear in all environments so they rarely break cross-environment rules, but decide
-  deliberately whether to filter them.
-- Set up the read-only service account from 3.6.8 before relying on it.
-- Consider applying sample-config manifests to the cluster so declared and live start from the
-  same place, then inject drift for the 3.8 scenarios.
+- Load rules from the `rules` table instead of `rules/rules.yaml`.
+- The 3.8 drift-injection scenarios can now be run against the zero-finding baseline: change a
+  manifest (declared) or the cluster (live, using the admin context), run the demo, record
+  what is detected, then restore the baseline.
 
 ## Known housekeeping
 
 - `npm audit` reports 4 high severity issues in dev dependencies. Do not run
   `npm audit fix --force`; it can break package versions.
+- `@kubernetes/client-node` pulls in `undici`, which asks for Node 22.19 or newer. It works on
+  the installed Node 22.17.1, but upgrade Node within v22 when convenient.
 - `.claude/`, `.windsurf/`, `.agents/` folders and `skills-lock.json` were created by `prisma init`.
 
 ## Writing style for any report text
