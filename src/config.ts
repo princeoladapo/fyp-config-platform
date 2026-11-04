@@ -13,6 +13,7 @@ export interface EnvironmentMapping {
 export interface PlatformConfig {
   repository: string;   // path to the Git repository
   ref: string;          // which commit or branch to read, e.g. HEAD or main
+  kubeContext?: string; // kubeconfig context to read live config from; default: current context
   environments: EnvironmentMapping[];
 }
 
@@ -21,5 +22,10 @@ export function loadConfig(path: string): PlatformConfig {
   if (!config?.environments?.length) {
     throw new Error(`No environments defined in ${path}`);
   }
-  return { repository: config.repository ?? '.', ref: config.ref ?? 'HEAD', environments: config.environments };
+  return {
+    repository: config.repository ?? '.',
+    ref: config.ref ?? 'HEAD',
+    kubeContext: config.kubeContext,
+    environments: config.environments,
+  };
 }

@@ -1,8 +1,10 @@
 # Environment mapping (Chapter Three, Section 3.6.2).
 # repository: path to the Git repository ("." means this project folder)
 # ref: which commit or branch to read declared configuration from
+# kubeContext: which kubeconfig context to read live configuration from
 repository: .
 ref: HEAD
+kubeContext: kind-fyp-cluster
 
 environments:
   - name: development
