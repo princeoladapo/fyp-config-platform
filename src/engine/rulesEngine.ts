@@ -41,8 +41,8 @@ function compare(a: unknown, op: Operator, b: unknown): boolean {
 // Checks a fixed condition such as ">= 3", "== true" or
 // "startsWith(registry.example.com/)" against one value.
 function checkFixed(condition: string, value: unknown): boolean {
-  const starts = condition.match(/^startsWith\((.*)\)$/);
-  if (starts) return String(value).startsWith(starts[1]);
+  const prefix = condition.match(/^startsWith\((.*)\)$/)?.[1];
+  if (prefix !== undefined) return String(value).startsWith(prefix);
 
   for (const op of OPERATORS) {
     if (condition.startsWith(op)) {
@@ -58,6 +58,7 @@ function parseRelational(condition: string, environments: string[]) {
   const m = condition.match(/^(\w+)\s*(>=|<=|==|!=|>|<)\s*(\w+)$/);
   if (!m) return null;
   const [, left, op, right] = m;
+  if (left === undefined || op === undefined || right === undefined) return null;
   if (!environments.includes(left) || !environments.includes(right)) return null;
   return { left, op: op as Operator, right };
 }
@@ -143,8 +144,9 @@ export function evaluate(
             // in a tie, the first environment listed in the rule wins.
             const counts = new Map<string, number>();
             vals.forEach((v) => counts.set(v.value, (counts.get(v.value) ?? 0) + 1));
-            const expected = [...counts.entries()]
-              .sort((a, b) => b[1] - a[1])[0][0];
+            const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+            if (!top) continue;
+            const expected = top[0];
             for (const v of vals) {
               if (v.value !== expected) {
                 report(v.env, name, prop, `same as other environments (${expected})`, v.value);

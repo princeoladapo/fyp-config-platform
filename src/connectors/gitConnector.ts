@@ -39,7 +39,7 @@ export function readDeclaredConfiguration(
       // One file can hold several resources separated by "---".
       for (const doc of parseAllDocuments(text)) {
         if (doc.errors.length > 0) {
-          throw new Error(`YAML error in ${file}: ${doc.errors[0].message}`);
+          throw new Error(`YAML error in ${file}: ${doc.errors[0]?.message}`);
         }
         records.push(...normalizeResource(doc.toJS(), env.name, 'declared'));
       }
