@@ -1,5 +1,19 @@
 node_modules
-# Keep environment variables out of version control
-.env
-
 /generated/prisma
+
+# Keep environment variables out of version control (the example file is safe to commit)
+.env
+.env.*
+!.env.example
+
+# Cluster credentials: kubeconfig files, service account tokens, keys and certificates.
+# The read-only token lives in %USERPROFILE%\.kube\config, outside the repository.
+*.kubeconfig
+kubeconfig*
+*.token
+*.pem
+*.key
+*.crt
+
+# Image archives made when loading images into kind
+*.tar

@@ -67,6 +67,9 @@ config/environments.yaml       environment mapping and kubeContext (fyp-readonly
 rules/rules.yaml               validation rules
 sample-config/environments/*/  sample manifests for development, staging, production
 k8s/rbac.yaml                  read-only service account, Roles and RoleBindings (3.6.8)
+k8s/kind-config.yaml           kind cluster definition (name fyp-cluster, pinned node image)
+scripts/setup.ps1              reproducible setup of the whole environment (see SETUP.md)
+.env.example                   DATABASE_URL template; setup.ps1 creates .env from it
 prisma/schema.prisma           database schema (4 tables, see below)
 tsconfig.json                  strict type checking only; tsx runs the code
 ```
@@ -85,7 +88,7 @@ changes before running, or the connector will not see them.
 
 ## Local environment (Windows 11 + WSL2 + Docker Desktop)
 
-- Node v22, Git 2.42, kind v0.33, kubectl v1.36.
+- Node v22.23 (22.19+ required), Git 2.42, kind v0.33, kubectl v1.36.
 - kind cluster `fyp-cluster` (admin kubectl context `kind-fyp-cluster`), namespaces
   `development`, `staging`, `production`. Each runs the sample manifests: `web-app` with 1, 2 and
   3 replicas, a `web-app` Service, and a `web-config` ConfigMap.
@@ -116,10 +119,13 @@ changes before running, or the connector will not see them.
   ```
   for /f %t in ('kubectl create token config-validator -n config-validator --duration=720h --context kind-fyp-cluster') do @kubectl config set-credentials config-validator --token=%t
   ```
-- If the cluster is ever recreated: create the namespaces, load the images, apply each
-  `sample-config/environments/<env>/web-app.yaml` with `-n <env>`, apply `k8s/rbac.yaml`, then
-  create the token and the context
-  (`kubectl config set-context fyp-readonly --cluster=kind-fyp-cluster --user=config-validator`).
+- Rebuilding the environment (or setting it up on another machine): run
+  `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`. It checks prerequisites, creates
+  the cluster from `k8s/kind-config.yaml`, loads the images (detecting amd64/arm64), applies the
+  manifests and RBAC, renews the token and `fyp-readonly` context, starts PostgreSQL, runs
+  `npm ci` and `prisma migrate deploy`, and checks the demo reports zero findings. Safe to re-run.
+  Tested from a fresh clone on 4 November 2026 (about 7 minutes from scratch). SETUP.md is the
+  guide for a new Windows 11 machine.
 - PostgreSQL in Docker container `fyp-postgres`, database `fyp_config_platform`, port 5432.
   Connection string is in `.env` (DATABASE_URL).
 - If Docker Desktop was closed, start it first; the cluster and database run inside it.
@@ -144,8 +150,8 @@ changes before running, or the connector will not see them.
 
 - `npm audit` reports 4 high severity issues in dev dependencies. Do not run
   `npm audit fix --force`; it can break package versions.
-- `@kubernetes/client-node` pulls in `undici`, which asks for Node 22.19 or newer. It works on
-  the installed Node 22.17.1, but upgrade Node within v22 when convenient.
+- `@kubernetes/client-node` pulls in `undici`, which needs Node 22.19 or newer; setup.ps1
+  enforces this.
 - `.claude/`, `.windsurf/`, `.agents/` folders and `skills-lock.json` were created by `prisma init`.
 
 ## Writing style for any report text

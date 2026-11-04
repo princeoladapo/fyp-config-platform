@@ -1,0 +1,13 @@
+# kind cluster for the platform. Used by scripts/setup.ps1:
+#   kind create cluster --config k8s/kind-config.yaml
+#
+# The node image is pinned (Kubernetes v1.37.0, the default for kind v0.33.0)
+# so every machine runs the same Kubernetes version. The digest covers both
+# amd64 and arm64.
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: fyp-cluster
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
