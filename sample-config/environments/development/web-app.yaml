@@ -16,9 +16,9 @@ spec:
     spec:
       containers:
         - name: web-app
-          image: docker.io/library/web-app:dev
+          image: registry.example.com/web-app:dev
           ports:
-            - containerPort: 80
+            - containerPort: 8080
 ---
 apiVersion: v1
 kind: Service
@@ -29,7 +29,7 @@ spec:
     app: web-app
   ports:
     - port: 80
-      targetPort: 80
+      targetPort: 8080
 ---
 apiVersion: v1
 kind: ConfigMap
