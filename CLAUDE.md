@@ -140,6 +140,9 @@ changes before running, or the connector will not see them.
 ## Database (Prisma 7.10)
 
 - Prisma 7 layout: connection URL lives in `prisma7.config.ts`, not in schema.prisma.
+- `prisma7.config.ts` is the default config name in Prisma 7.10 (`prisma init` creates it and the
+  CLI looks for it first; `prisma.config.ts` is only a legacy fallback). Do not rename it, and no
+  `--config` flag is needed.
   The client is generated to `generated/prisma` and needs the `@prisma/adapter-pg` driver adapter
   (`new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`) and `dotenv`.
 - Stay on Prisma 7. Do not upgrade to Prisma 8 (release candidate, breaking changes).
