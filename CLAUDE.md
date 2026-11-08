@@ -34,10 +34,12 @@ which representation it was observed in.
   2. Git connector (DONE)
   3. Kubernetes connector (DONE)
   4. Rules stored in the database (DONE)
-  5. Reporting interface and persistence of findings (NEXT)
+  5. Reporting interface and persistence of findings, in two parts:
+     5a. Runs and findings stored, environment mapping in the database (DONE)
+     5b. Reporting interface (API) over stored runs (NEXT)
 - 3.6.2 Environment mapping: one Git directory per environment, paired with the namespace of the
-  same name. Held in config/environments.yaml, which the demo still reads; the seed copies it
-  into the database `environments` table, which the rule repository checks rules against.
+  same name. Runs read it from the database `environments` table (git_directory,
+  k8s_namespace); the `environments:` list in config/environments.yaml is only the seed source.
 - 3.6.5 Normalized record: `(environment, representation, kind, name, property, value)`.
   Only user-configurable sections are kept: `spec`, `data`, `metadata.labels`. Server-managed
   fields (status, managedFields, resourceVersion, uid, timestamps) are excluded.
@@ -60,15 +62,20 @@ which representation it was observed in.
 src/engine/types.ts            shared types (NormalizedRecord, RuleDefinition, EngineFinding)
 src/engine/rulesEngine.ts      evaluate(records, rules, environments) -> findings
 src/normalization/normalize.ts normalizeResource(resource, env, representation) -> records
-src/connectors/gitConnector.ts reads committed YAML per environment (default ref HEAD)
+src/connectors/gitConnector.ts resolveCommit(ref) -> SHA; reads committed YAML per environment at a ref
 src/connectors/k8sConnector.ts reads live Deployments, Services, ConfigMaps per namespace
-src/config.ts                  loads config/environments.yaml
+src/config.ts                  loadPlatformSettings() (repository, ref, kubeContext); loadConfig() for the seed
 src/db.ts                      createPrismaClient(): PrismaClient + PrismaPg adapter, DATABASE_URL from .env
 src/rules/ruleKind.ts          ruleKindOf(condition): FIXED_CONDITION / SAME_VALUE / RELATIONSHIP
 src/rules/ruleRepository.ts    loadEnabledRules(prisma) -> RuleDefinition[], validates each rule first
+src/environments/environmentRepository.ts  loadEnvironments(prisma): mapping from the database, ordered by id
+src/runs/runService.ts         executeRun(prisma): stores a run and its findings; loadRunFindings(prisma, id)
+src/runs/formatFindings.ts     findings -> printable lines (shared by demo and runs CLI)
 src/rulesCli.ts                rules CLI: list | enable <name> | disable <name>
-src/demo.ts                    runs a full validation (rules from the database) and prints findings
-config/environments.yaml       environment mapping and kubeContext (fyp-readonly)
+src/runsCli.ts                 runs CLI: list | show <id>
+src/demo.ts                    calls executeRun and prints the stored run and its findings
+config/environments.yaml       platform settings (repository, ref, kubeContext fyp-readonly) and
+                               the environments list (seed source only)
 rules/rules.yaml               validation rules: the seed source, not read by the demo
 prisma/seed.ts                 upserts rules.yaml and environments.yaml into the database by name
 sample-config/environments/*/  sample manifests for development, staging, production
@@ -81,7 +88,10 @@ tsconfig.json                  strict type checking only; tsx runs the code
 ```
 
 Run the demo with: `npx tsx src/demo.ts`. It prints "Loaded N rules from the database" (5 on the
-baseline). Baseline: **zero findings** (declared and live both match the sample manifests). Any finding now means drift was introduced.
+baseline) and the stored run number. Baseline: **zero findings** (declared and live both match
+the sample manifests), stored as a CONSISTENT run in about 0.5 s (the whole command takes longer
+because of tsx start-up). Any finding now means drift was introduced. List stored runs with
+`npx tsx src/runsCli.ts list`, and see one with `show <id>`.
 
 Type check with: `npx tsc --noEmit` (should report nothing).
 
@@ -140,15 +150,24 @@ changes before running, or the connector will not see them.
 ## Database (Prisma 7.10)
 
 - Prisma 7 layout: connection URL lives in `prisma7.config.ts`, not in schema.prisma.
+  The client is generated to `generated/prisma` and needs the `@prisma/adapter-pg` driver adapter
+  (`new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`) and `dotenv`.
 - `prisma7.config.ts` is the default config name in Prisma 7.10 (`prisma init` creates it and the
   CLI looks for it first; `prisma.config.ts` is only a legacy fallback). Do not rename it, and no
   `--config` flag is needed.
-  The client is generated to `generated/prisma` and needs the `@prisma/adapter-pg` driver adapter
-  (`new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`) and `dotenv`.
 - Stay on Prisma 7. Do not upgrade to Prisma 8 (release candidate, breaking changes).
-- Tables: environments, rules, validation_runs, findings. Migrations `init`, `drop_templates` and
-  `add_rule_kind_and_description` applied. Every finding references a rule (`findings.rule_id` is
-  required).
+- Tables: environments, rules, validation_runs, findings. Migrations `init`, `drop_templates`,
+  `add_rule_kind_and_description` and `store_runs_and_environment_mapping` applied. Every finding
+  references a rule (`findings.rule_id` is required); `findings.run_id` is indexed.
+- Keep the existing names (they match the report's design): environments.git_directory and
+  k8s_namespace, validation_runs.completed_at, RunStatus RUNNING / CONSISTENT / VIOLATIONS_FOUND /
+  FAILED. A finished run is CONSISTENT when finding_count is 0, otherwise VIOLATIONS_FOUND.
+- `validation_runs` also stores duration_ms, git_ref (as configured, e.g. HEAD), git_commit (the SHA
+  resolved at the start; manifests are read at that SHA), kube_context, declared_record_count,
+  live_record_count, rules_checked, finding_count and error_message. Counts stay null until that
+  stage finishes, so a FAILED run shows how far it got. Findings and the finished run are written
+  in one transaction. Platform settings are read before the run row is created (git_ref is
+  required), so a missing or broken config/environments.yaml fails without storing a run.
 - `rules` columns: name (unique), kind (enum RuleKind: FIXED_CONDITION, SAME_VALUE, RELATIONSHIP,
   the report's terms), description (optional), resource, property, environments (empty array =
   all environments; the relationship rule uses this), condition, severity, enabled (default true).
@@ -160,17 +179,17 @@ changes before running, or the connector will not see them.
   does not name two different known environments, a SAME_VALUE rule with exactly one environment.
 - `generated/prisma` is git-ignored: run `npx prisma generate` after changing the schema.
 
-## Next step: increment five, reporting interface and persistence of findings
+## Next step: increment 5b, reporting interface
 
-- Save each run to `validation_runs` and its findings to `findings` (each with rule_id and
-  environment_id from the database rows, and the representation).
-- A reporting interface over stored runs (fastify is already a dependency).
+- An HTTP API (fastify is already a dependency) over stored runs: list runs, show one run with its
+  findings, and start a run by calling `executeRun(prisma)` from src/runs/runService.ts (it does
+  not print, and throws RunFailedError carrying the stored run id).
 - The 3.8 drift-injection scenarios can be run against the zero-finding baseline: change a
   manifest (declared) or the cluster (live, using the admin context), run the demo, record
-  what is detected, then restore the baseline. Verified for increment four: scaling production
-  to 1 replica gives HIGH production-minimum-replicas and MEDIUM
-  production-replicas-not-below-staging (both live); disabling the first with the CLI leaves
-  only the MEDIUM one.
+  what is detected, then restore the baseline. Verified for 5a: scaling production to 1 replica
+  stores a VIOLATIONS_FOUND run with exactly two findings, HIGH production-minimum-replicas
+  (rule 1) and MEDIUM production-replicas-not-below-staging (rule 3), both production / LIVE.
+  An invalid rule in the database stores a FAILED run with the validation error.
 
 ## Known housekeeping
 

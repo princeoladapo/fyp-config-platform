@@ -7,6 +7,7 @@
     "seed": "prisma db seed",
     "demo": "tsx src/demo.ts",
     "rules": "tsx src/rulesCli.ts",
+    "runs": "tsx src/runsCli.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

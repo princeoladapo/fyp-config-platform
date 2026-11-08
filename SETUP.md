@@ -127,10 +127,25 @@ npx tsx src/demo.ts
 Zero findings is the baseline. Any finding means a configuration drifted from the rules in
 the database.
 
+Every run is stored in the database with its findings, including runs that fail. The demo
+prints the run's number. To look at stored runs:
+
+```
+npx tsx src/runsCli.ts list
+npx tsx src/runsCli.ts show 2
+```
+
+`list` shows each run's id, start time, status, duration and number of findings. A run is
+`CONSISTENT` (no findings), `VIOLATIONS_FOUND`, or `FAILED`; `show` prints a failed run's error
+message and how far it got. Each run records the exact Git commit it read: `ref` in
+`config/environments.yaml` (normally `HEAD`) is resolved to a commit when the run starts.
+
 ### Rules
 
-The demo reads its rules from the `rules` table in the database, not from `rules/rules.yaml`.
-That file is the seed source: after editing it, load the changes into the database with
+The demo reads its rules from the `rules` table and the environment mapping (which Git folder
+and namespace belong to each environment) from the `environments` table. The files
+`rules/rules.yaml` and the `environments:` list in `config/environments.yaml` are the seed
+source: after editing either, load the changes into the database with
 
 ```
 npx prisma db seed

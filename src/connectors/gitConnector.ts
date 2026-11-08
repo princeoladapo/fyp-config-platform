@@ -13,6 +13,17 @@ function git(repository: string, args: string[]): string {
   return execFileSync('git', args, { cwd: repository, encoding: 'utf8' });
 }
 
+// Turns a ref such as HEAD or main into the full commit SHA it points to now.
+// A run reads the manifests at this SHA, so the commit it records is exactly the
+// one it checked, even if a new commit is made while the run is going.
+export function resolveCommit(repository: string, ref: string): string {
+  try {
+    return git(repository, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).trim();
+  } catch {
+    throw new Error(`Git ref "${ref}" does not name a commit in ${repository}`);
+  }
+}
+
 export function readDeclaredConfiguration(
   repository: string,
   ref: string,

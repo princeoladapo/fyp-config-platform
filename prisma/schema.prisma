@@ -59,11 +59,22 @@ model Rule {
 }
 
 model ValidationRun {
-  id          Int       @id @default(autoincrement())
-  startedAt   DateTime  @default(now()) @map("started_at")
-  completedAt DateTime? @map("completed_at")
-  status      RunStatus @default(RUNNING)
-  findings    Finding[]
+  id                  Int       @id @default(autoincrement())
+  startedAt           DateTime  @default(now()) @map("started_at")
+  completedAt         DateTime? @map("completed_at")
+  status              RunStatus @default(RUNNING)
+  durationMs          Int?      @map("duration_ms")
+  gitRef              String    @map("git_ref") // the configured ref, e.g. HEAD
+  gitCommit           String?   @map("git_commit") // the commit SHA the manifests were read at
+  kubeContext         String?   @map("kube_context") // null: the kubeconfig's current context
+  // Counts stay null until that stage of the run has finished, so a FAILED run
+  // shows how far it got.
+  declaredRecordCount Int?      @map("declared_record_count")
+  liveRecordCount     Int?      @map("live_record_count")
+  rulesChecked        Int?      @map("rules_checked")
+  findingCount        Int?      @map("finding_count")
+  errorMessage        String?   @map("error_message")
+  findings            Finding[]
 
   @@map("validation_runs")
 }
@@ -85,5 +96,6 @@ model Finding {
   environment Environment   @relation(fields: [environmentId], references: [id])
   rule        Rule          @relation(fields: [ruleId], references: [id])
 
+  @@index([runId])
   @@map("findings")
 }

@@ -1,4 +1,7 @@
-# Environment mapping (Chapter Three, Section 3.6.2).
+# Platform settings and environment mapping (Chapter Three, Section 3.6.2).
+# repository, ref and kubeContext are read on every validation run.
+# The environments list is the seed source: `npx prisma db seed` copies it into the
+# environments table, and runs take the mapping from the database. Re-seed after editing it.
 # repository: path to the Git repository ("." means this project folder)
 # ref: which commit or branch to read declared configuration from
 # kubeContext: which kubeconfig context to read live configuration from.
