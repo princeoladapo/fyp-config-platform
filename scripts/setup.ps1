@@ -6,7 +6,8 @@
   Checks the prerequisites, creates the kind cluster, loads the application
   images, applies the sample manifests and the read-only RBAC, creates the
   fyp-readonly kubeconfig context, starts PostgreSQL, installs packages,
-  applies the database migrations and runs the demo.
+  applies the database migrations, seeds the rules and environments, and
+  runs the demo.
 
   Safe to re-run: every step checks what already exists and skips or repeats
   harmlessly. If the script stops, fix the problem it names and run it again.
@@ -361,7 +362,7 @@ Write-Ok 'Packages installed.'
 
 # ---------------------------------------------------------------- 9. Prisma
 
-Write-Step 9 'Applying database migrations and generating the Prisma client'
+Write-Step 9 'Applying database migrations, generating the Prisma client and seeding the rules'
 # migrate deploy only applies committed migrations; it never creates new ones or resets data.
 npx prisma migrate deploy
 if ($LASTEXITCODE -ne 0) {
@@ -370,6 +371,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 Invoke-Checked 'prisma generate' { npx prisma generate }
 Write-Ok 'Database schema is up to date.'
+# The seed loads rules/rules.yaml and config/environments.yaml into the rules and environments
+# tables. It matches on name, so re-running creates no duplicates and keeps rules switched off
+# with the rules CLI switched off.
+Invoke-Checked 'prisma db seed' { npx prisma db seed }
+Write-Ok 'Rules and environments are in the database.'
 
 # ---------------------------------------------------------------- 10. demo
 

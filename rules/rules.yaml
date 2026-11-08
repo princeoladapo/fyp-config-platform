@@ -3,10 +3,13 @@
 #   - fixed:      ">= 3", "== true", "startsWith(...)"  (checked in each listed environment)
 #   - same:       the value must match across the listed environments
 #   - relational: "production >= staging"               (compares two environments)
+# kind and enabled are not written here: the seed script (prisma/seed.ts) works out
+# the kind from the condition, and new rules are enabled by default.
 # Anything with no rule (for example LOG_LEVEL) is allowed to differ.
 
 rules:
   - rule: production-minimum-replicas
+    description: Production must run at least three replicas.
     resource: Deployment
     property: spec.replicas
     environments: [production]
@@ -14,6 +17,7 @@ rules:
     severity: high
 
   - rule: approved-image-registry
+    description: Container images must come from the approved registry.
     resource: Deployment
     property: spec.template.spec.containers[*].image
     environments: [development, staging, production]
@@ -21,12 +25,14 @@ rules:
     severity: high
 
   - rule: production-replicas-not-below-staging
+    description: Production must not run fewer replicas than staging.
     resource: Deployment
     property: spec.replicas
     condition: "production >= staging"
     severity: medium
 
   - rule: image-matches-between-staging-and-production
+    description: Production must run the same image that was tested in staging.
     resource: Deployment
     property: spec.template.spec.containers[*].image
     environments: [staging, production]
@@ -34,6 +40,7 @@ rules:
     severity: high
 
   - rule: run-as-non-root-consistent
+    description: The runAsNonRoot setting must be the same in staging and production.
     resource: Deployment
     property: spec.template.spec.securityContext.runAsNonRoot
     environments: [staging, production]

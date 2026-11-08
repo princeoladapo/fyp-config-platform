@@ -1,22 +1,30 @@
 // Runs a full validation: declared configuration from Git and
 // live configuration from the Kubernetes cluster.
+// Rules are loaded from the database (seed it first with: npx prisma db seed).
 // Usage: npx tsx src/demo.ts
 
-import { readFileSync } from 'fs';
-import { parse } from 'yaml';
 import { loadConfig } from './config';
 import { readDeclaredConfiguration } from './connectors/gitConnector';
 import { readLiveConfiguration } from './connectors/k8sConnector';
 import { evaluate } from './engine/rulesEngine';
-import { RuleDefinition } from './engine/types';
+import { createPrismaClient } from './db';
+import { loadEnabledRules } from './rules/ruleRepository';
 
 async function main() {
   const config = loadConfig('config/environments.yaml');
   const environmentNames = config.environments.map((e) => e.name);
 
+  const prisma = createPrismaClient();
+  let rules;
+  try {
+    rules = await loadEnabledRules(prisma);
+  } finally {
+    await prisma.$disconnect();
+  }
+  console.log(`Loaded ${rules.length} rules from the database.`);
+
   const declared = readDeclaredConfiguration(config.repository, config.ref, config.environments);
   const live = await readLiveConfiguration(config.environments, config.kubeContext);
-  const rules: RuleDefinition[] = parse(readFileSync('rules/rules.yaml', 'utf8')).rules;
 
   const findings = evaluate([...declared, ...live], rules, environmentNames);
 

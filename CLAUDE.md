@@ -33,10 +33,11 @@ which representation it was observed in.
   1. Rules engine on sample data (DONE)
   2. Git connector (DONE)
   3. Kubernetes connector (DONE)
-  4. Rules stored in the database (NEXT)
-  5. Reporting interface and persistence of findings
+  4. Rules stored in the database (DONE)
+  5. Reporting interface and persistence of findings (NEXT)
 - 3.6.2 Environment mapping: one Git directory per environment, paired with the namespace of the
-  same name. Held in config/environments.yaml for now; the database `environments` table later.
+  same name. Held in config/environments.yaml, which the demo still reads; the seed copies it
+  into the database `environments` table, which the rule repository checks rules against.
 - 3.6.5 Normalized record: `(environment, representation, kind, name, property, value)`.
   Only user-configurable sections are kept: `spec`, `data`, `metadata.labels`. Server-managed
   fields (status, managedFields, resourceVersion, uid, timestamps) are excluded.
@@ -62,9 +63,14 @@ src/normalization/normalize.ts normalizeResource(resource, env, representation) 
 src/connectors/gitConnector.ts reads committed YAML per environment (default ref HEAD)
 src/connectors/k8sConnector.ts reads live Deployments, Services, ConfigMaps per namespace
 src/config.ts                  loads config/environments.yaml
-src/demo.ts                    runs a full validation and prints findings
+src/db.ts                      createPrismaClient(): PrismaClient + PrismaPg adapter, DATABASE_URL from .env
+src/rules/ruleKind.ts          ruleKindOf(condition): FIXED_CONDITION / SAME_VALUE / RELATIONSHIP
+src/rules/ruleRepository.ts    loadEnabledRules(prisma) -> RuleDefinition[], validates each rule first
+src/rulesCli.ts                rules CLI: list | enable <name> | disable <name>
+src/demo.ts                    runs a full validation (rules from the database) and prints findings
 config/environments.yaml       environment mapping and kubeContext (fyp-readonly)
-rules/rules.yaml               validation rules
+rules/rules.yaml               validation rules: the seed source, not read by the demo
+prisma/seed.ts                 upserts rules.yaml and environments.yaml into the database by name
 sample-config/environments/*/  sample manifests for development, staging, production
 k8s/rbac.yaml                  read-only service account, Roles and RoleBindings (3.6.8)
 k8s/kind-config.yaml           kind cluster definition (name fyp-cluster, pinned node image)
@@ -74,8 +80,8 @@ prisma/schema.prisma           database schema (4 tables, see below)
 tsconfig.json                  strict type checking only; tsx runs the code
 ```
 
-Run the demo with: `npx tsx src/demo.ts`. Baseline: **zero findings** (declared and live both
-match the sample manifests). Any finding now means drift was introduced.
+Run the demo with: `npx tsx src/demo.ts`. It prints "Loaded N rules from the database" (5 on the
+baseline). Baseline: **zero findings** (declared and live both match the sample manifests). Any finding now means drift was introduced.
 
 Type check with: `npx tsc --noEmit` (should report nothing).
 
@@ -123,7 +129,8 @@ changes before running, or the connector will not see them.
   `powershell -ExecutionPolicy Bypass -File scripts\setup.ps1`. It checks prerequisites, creates
   the cluster from `k8s/kind-config.yaml`, loads the images (detecting amd64/arm64), applies the
   manifests and RBAC, renews the token and `fyp-readonly` context, starts PostgreSQL, runs
-  `npm ci` and `prisma migrate deploy`, and checks the demo reports zero findings. Safe to re-run.
+  `npm ci`, `prisma migrate deploy` and `prisma db seed`, and checks the demo reports zero
+  findings. Safe to re-run.
   Tested from a fresh clone on 4 November 2026 (about 7 minutes from scratch). SETUP.md is the
   guide for a new Windows 11 machine.
 - PostgreSQL in Docker container `fyp-postgres`, database `fyp_config_platform`, port 5432.
@@ -136,15 +143,31 @@ changes before running, or the connector will not see them.
   The client is generated to `generated/prisma` and needs the `@prisma/adapter-pg` driver adapter
   (`new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`) and `dotenv`.
 - Stay on Prisma 7. Do not upgrade to Prisma 8 (release candidate, breaking changes).
-- Tables: environments, rules, validation_runs, findings. Migrations `init` and `drop_templates`
-  applied. Every finding references a rule (`findings.rule_id` is required).
+- Tables: environments, rules, validation_runs, findings. Migrations `init`, `drop_templates` and
+  `add_rule_kind_and_description` applied. Every finding references a rule (`findings.rule_id` is
+  required).
+- `rules` columns: name (unique), kind (enum RuleKind: FIXED_CONDITION, SAME_VALUE, RELATIONSHIP,
+  the report's terms), description (optional), resource, property, environments (empty array =
+  all environments; the relationship rule uses this), condition, severity, enabled (default true).
+- Seed: `npx prisma db seed` (configured as `migrations.seed` in prisma7.config.ts; Prisma 7 does
+  not read a seed entry from package.json). It works out `kind` from the condition, matches on name,
+  and leaves `enabled` untouched on existing rules. It does not delete rules removed from the file.
+- The rule repository rejects, naming each rule: unknown resource kind, a stored kind that does not
+  match the condition, environments missing from the `environments` table, a relationship rule that
+  does not name two different known environments, a SAME_VALUE rule with exactly one environment.
+- `generated/prisma` is git-ignored: run `npx prisma generate` after changing the schema.
 
-## Next step: increment four, rules stored in the database
+## Next step: increment five, reporting interface and persistence of findings
 
-- Load rules from the `rules` table instead of `rules/rules.yaml`.
-- The 3.8 drift-injection scenarios can now be run against the zero-finding baseline: change a
+- Save each run to `validation_runs` and its findings to `findings` (each with rule_id and
+  environment_id from the database rows, and the representation).
+- A reporting interface over stored runs (fastify is already a dependency).
+- The 3.8 drift-injection scenarios can be run against the zero-finding baseline: change a
   manifest (declared) or the cluster (live, using the admin context), run the demo, record
-  what is detected, then restore the baseline.
+  what is detected, then restore the baseline. Verified for increment four: scaling production
+  to 1 replica gives HIGH production-minimum-replicas and MEDIUM
+  production-replicas-not-below-staging (both live); disabling the first with the CLI leaves
+  only the MEDIUM one.
 
 ## Known housekeeping
 

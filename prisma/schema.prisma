@@ -13,6 +13,13 @@ enum Severity {
   LOW
 }
 
+// The three kinds of rule in Section 3.6.6.
+enum RuleKind {
+  FIXED_CONDITION
+  SAME_VALUE
+  RELATIONSHIP
+}
+
 enum RunStatus {
   RUNNING
   CONSISTENT
@@ -38,6 +45,8 @@ model Environment {
 model Rule {
   id           Int       @id @default(autoincrement())
   name         String    @unique
+  kind         RuleKind
+  description  String?
   resource     String
   property     String
   environments String[]

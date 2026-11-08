@@ -106,7 +106,8 @@ The script takes 5 to 15 minutes the first time. It works through ten steps:
 7. creates `.env` with a random database password (if it does not exist yet) and starts
    PostgreSQL in a Docker container called `fyp-postgres`
 8. installs the Node packages with `npm ci`
-9. applies the database migrations with Prisma
+9. applies the database migrations with Prisma, then seeds the database: the rules from
+   `rules/rules.yaml` and the environments from `config/environments.yaml`
 10. runs the demo and checks that it reports zero findings
 
 It ends with **SETUP COMPLETE: the demo reports zero findings.**
@@ -124,7 +125,30 @@ npx tsx src/demo.ts
 ```
 
 Zero findings is the baseline. Any finding means a configuration drifted from the rules in
-`rules/rules.yaml`.
+the database.
+
+### Rules
+
+The demo reads its rules from the `rules` table in the database, not from `rules/rules.yaml`.
+That file is the seed source: after editing it, load the changes into the database with
+
+```
+npx prisma db seed
+```
+
+The seed matches rules by name, so running it again never creates duplicates. It does not
+delete a rule you remove from the file, and it does not switch back on a rule you switched off.
+
+To see the rules and switch one off or on without deleting it:
+
+```
+npx tsx src/rulesCli.ts list
+npx tsx src/rulesCli.ts disable production-minimum-replicas
+npx tsx src/rulesCli.ts enable production-minimum-replicas
+```
+
+If a rule in the database is invalid (an unknown resource kind or environment, or a condition
+that does not match its kind), the demo stops and names the rule and the problem.
 
 The platform reads the manifests that are **committed** in Git, not unsaved edits. Commit a
 manifest change before running the demo, or it will not be seen.
@@ -165,7 +189,9 @@ docker volume rm fyp-postgres-data
 ```
 
 **The demo reports findings straight after setup**: check that you have not edited the
-manifests or rules, with `git status`. The baseline in the repository reports zero.
+manifests or rules, with `git status`, and that no rule is switched off or changed in the
+database (`npx tsx src/rulesCli.ts list`; `npx prisma db seed` restores the rule definitions).
+The baseline in the repository reports zero.
 
 **Starting again from scratch**: delete the cluster and run the script again.
 
