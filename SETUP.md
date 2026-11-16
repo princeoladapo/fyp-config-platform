@@ -165,6 +165,31 @@ npx tsx src/rulesCli.ts enable production-minimum-replicas
 If a rule in the database is invalid (an unknown resource kind or environment, or a condition
 that does not match its kind), the demo stops and names the rule and the problem.
 
+### Reporting API
+
+The same runs, findings and rules are available over HTTP. Start the API in its own Command
+Prompt window and leave it running:
+
+```
+npm run api
+```
+
+It answers at `http://127.0.0.1:3000`. Try `http://127.0.0.1:3000/api/health` in a browser;
+`/api/runs`, `/api/runs/2`, `/api/rules` and `/api/environments` show the stored data. A
+`POST` to `/api/runs` starts a validation run and returns the stored result, and a `PATCH` to
+`/api/rules/<name>` with the body `{"enabled": false}` switches a rule off. Press Ctrl+C in that
+window to stop it. If port 3000 is taken, set another one first: `set API_PORT=3001`.
+
+The API listens on 127.0.0.1 only, so nothing on the network can reach it. The prototype is
+single-user with no login (Chapter Three, Section 3.6.8); user accounts and roles are future
+work. Like the demo, it only reads from Git and the cluster.
+
+To check every endpoint (this performs one real validation run):
+
+```
+npm run test:api
+```
+
 The platform reads the manifests that are **committed** in Git, not unsaved edits. Commit a
 manifest change before running the demo, or it will not be seen.
 

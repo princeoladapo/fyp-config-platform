@@ -17,6 +17,37 @@ import { EnvironmentMapping } from '../config';
 // Created by Kubernetes in every namespace; not part of the application's configuration.
 const IGNORED_CONFIGMAPS = ['kube-root-ca.crt'];
 
+// A short, readable reason for a failed request. The client library's ApiException
+// message is a multi-line dump (HTTP code, body, headers); the API server's own
+// message plus the status code says enough. A connection failure (Docker Desktop
+// closed, wrong server address) arrives as "fetch failed" with the real reason in cause.
+// The API server answers with a Status object (as JSON text or already parsed);
+// its "message" field is the part worth showing.
+function serverMessage(body: unknown): string | undefined {
+  let status = body;
+  if (typeof body === 'string') {
+    try { status = JSON.parse(body); } catch { return body.trim(); }
+  }
+  if (status && typeof status === 'object' && 'message' in status) {
+    return String((status as { message: unknown }).message);
+  }
+  return undefined;
+}
+
+function describeError(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const { code, body, cause, message } = error as {
+      code?: number; body?: unknown; cause?: unknown; message?: string;
+    };
+    if (typeof code === 'number') {
+      return `HTTP ${code} ${serverMessage(body) ?? message ?? ''}`.trim();
+    }
+    if (cause instanceof Error) return `${message}: ${cause.message}`;
+    if (typeof message === 'string') return message;
+  }
+  return String(error);
+}
+
 export async function readLiveConfiguration(
   environments: EnvironmentMapping[],
   context?: string,
@@ -24,6 +55,7 @@ export async function readLiveConfiguration(
   const kubeConfig = new KubeConfig();
   kubeConfig.loadFromDefault();
   if (context) kubeConfig.setCurrentContext(context);
+  const contextName = kubeConfig.getCurrentContext();
 
   const apps = kubeConfig.makeApiClient(AppsV1Api);
   const core = kubeConfig.makeApiClient(CoreV1Api);
@@ -40,8 +72,9 @@ export async function readLiveConfiguration(
       ]);
     } catch (error) {
       throw new Error(
-        `[k8s] Could not read namespace "${namespace}" (context ${kubeConfig.getCurrentContext()}). ` +
-          `Is Docker Desktop running and does the namespace exist? ${(error as Error).message}`,
+        `Could not read live configuration from context ${contextName}, namespace ${namespace}: ` +
+          describeError(error),
+        { cause: error },
       );
     }
 

@@ -47,8 +47,25 @@ const TO_DB_REPRESENTATION: Record<Representation, DbRepresentation> = {
   live: DbRepresentation.LIVE,
 };
 
+// A run that is still RUNNING after this long did not finish: the process was killed or
+// crashed before it could store a result (a run normally takes about a second).
+export const STALE_RUN_AFTER_MS = 5 * 60 * 1000;
+export const STALE_RUN_MESSAGE = 'Run did not finish (marked stale)';
+
+// Marks RUNNING rows older than STALE_RUN_AFTER_MS as FAILED, so that a crashed run does
+// not look like it is still going (and does not block the API's one-run-at-a-time check
+// forever). Returns how many rows were marked.
+export async function markStaleRuns(prisma: PrismaClient, now = new Date()): Promise<number> {
+  const result = await prisma.validationRun.updateMany({
+    where: { status: RunStatus.RUNNING, startedAt: { lt: new Date(now.getTime() - STALE_RUN_AFTER_MS) } },
+    data: { status: RunStatus.FAILED, errorMessage: STALE_RUN_MESSAGE, completedAt: now },
+  });
+  return result.count;
+}
+
 export async function executeRun(prisma: PrismaClient): Promise<RunOutcome> {
   const settings = loadPlatformSettings(SETTINGS_FILE);
+  await markStaleRuns(prisma);
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
 
@@ -71,8 +88,9 @@ export async function executeRun(prisma: PrismaClient): Promise<RunOutcome> {
     const commit = resolveCommit(settings.repository, settings.ref);
     progress.gitCommit = commit;
 
-    const declared = readDeclaredConfiguration(settings.repository, commit, environments);
+    const { records: declared, warnings } = readDeclaredConfiguration(settings.repository, commit, environments);
     progress.declaredRecordCount = declared.length;
+    progress.warnings = warnings;
 
     const live = await readLiveConfiguration(environments, settings.kubeContext);
     progress.liveRecordCount = live.length;

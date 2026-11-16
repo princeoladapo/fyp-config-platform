@@ -52,6 +52,10 @@ async function show(prisma: PrismaClient, idText: string | undefined) {
   console.log(`  Declared records: ${count(run.declaredRecordCount)}`);
   console.log(`  Live records:     ${count(run.liveRecordCount)}`);
   if (run.errorMessage) console.log(`  Error:            ${run.errorMessage.replace(/\n/g, '\n                    ')}`);
+  if (run.warnings.length > 0) {
+    console.log(`  Warnings:         ${run.warnings.length}`);
+    run.warnings.forEach((w) => console.log(`    - ${w}`));
+  }
   console.log('');
 
   if (run.status === 'RUNNING' || run.status === 'FAILED') {

@@ -8,7 +8,9 @@
     "demo": "tsx src/demo.ts",
     "rules": "tsx src/rulesCli.ts",
     "runs": "tsx src/runsCli.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "api": "tsx src/api/server.ts",
+    "test:api": "tsx --test src/api/server.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",

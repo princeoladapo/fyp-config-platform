@@ -24,12 +24,20 @@ export function resolveCommit(repository: string, ref: string): string {
   }
 }
 
+export interface DeclaredConfiguration {
+  records: NormalizedRecord[];
+  // Problems that did not stop the read, e.g. an environment directory with nothing
+  // committed. Returned rather than printed so the run can store them (increment 5b).
+  warnings: string[];
+}
+
 export function readDeclaredConfiguration(
   repository: string,
   ref: string,
   environments: EnvironmentMapping[],
-): NormalizedRecord[] {
+): DeclaredConfiguration {
   const records: NormalizedRecord[] = [];
+  const warnings: string[] = [];
 
   for (const env of environments) {
     const directory = env.gitDirectory.replace(/\\/g, '/').replace(/\/$/, '');
@@ -41,7 +49,10 @@ export function readDeclaredConfiguration(
       .filter((f) => /\.ya?ml$/i.test(f));
 
     if (files.length === 0) {
-      console.warn(`[git] No committed YAML files in ${directory} at ${ref}. Have they been committed?`);
+      warnings.push(
+        `No committed YAML in ${directory} at ${ref.slice(0, 12)} for environment ${env.name}. ` +
+          'Have the manifests been committed?',
+      );
       continue;
     }
 
@@ -57,5 +68,5 @@ export function readDeclaredConfiguration(
     }
   }
 
-  return records;
+  return { records, warnings };
 }

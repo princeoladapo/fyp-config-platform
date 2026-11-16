@@ -74,6 +74,9 @@ model ValidationRun {
   rulesChecked        Int?      @map("rules_checked")
   findingCount        Int?      @map("finding_count")
   errorMessage        String?   @map("error_message")
+  // Problems that did not stop the run, e.g. an environment directory with no committed
+  // YAML. A Prisma list cannot be optional; the column is nullable TEXT[] and NULL reads as [].
+  warnings            String[]
   findings            Finding[]
 
   @@map("validation_runs")
