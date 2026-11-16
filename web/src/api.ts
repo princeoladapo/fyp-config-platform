@@ -86,9 +86,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  // Only a request that carries a body is JSON. Declaring application/json on a bodiless
+  // request (POST /api/runs) makes Fastify reject it: "Body cannot be empty when
+  // content-type is set to 'application/json'".
+  const headers: Record<string, string> = init?.body !== undefined ? { 'content-type': 'application/json' } : {};
   let response: Response;
   try {
-    response = await fetch(url, { ...init, headers: { 'content-type': 'application/json', ...init?.headers } });
+    response = await fetch(url, { ...init, headers });
   } catch {
     throw new ApiUnreachableError();
   }

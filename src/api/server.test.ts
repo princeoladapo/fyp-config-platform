@@ -150,6 +150,19 @@ describe('GET /api/runs/:id', () => {
 });
 
 describe('POST /api/runs', () => {
+  // What the dashboard's first fetch client sent: a JSON content type with no body.
+  // The request is malformed, so the API keeps rejecting it (400, usual error shape)
+  // rather than guessing; the client was fixed to send the header only with a body.
+  it('returns 400, and stores no run, for a JSON content type with an empty body', async () => {
+    const before = await prisma.validationRun.count();
+    const res = await app.inject({
+      method: 'POST', url: '/api/runs', headers: { 'content-type': 'application/json' },
+    });
+    assert.equal(res.statusCode, 400);
+    assert.match(res.json().error, /Body cannot be empty when content-type is set to 'application\/json'/);
+    assert.equal(await prisma.validationRun.count(), before, 'no run should have been stored');
+  });
+
   it('returns 409 while another run is RUNNING', async () => {
     const fake = await prisma.validationRun.create({ data: { status: RunStatus.RUNNING, gitRef: 'HEAD' } });
     try {

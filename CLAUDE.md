@@ -210,7 +210,7 @@ changes before running, or the connector will not see them.
   fields are rejected (`removeAdditional: false`), not stripped. Before the 409 check, and at
   the start of executeRun, `markStaleRuns` marks RUNNING rows older than 5 minutes as FAILED
   ("Run did not finish (marked stale)") so a crashed run cannot block later ones.
-- Tests: `npm run test:api` (15 tests, fastify.inject, needs the database, Git and the
+- Tests: `npm run test:api` (16 tests, fastify.inject, needs the database, Git and the
   cluster; it performs one real run and cleans up the fake RUNNING rows it creates, which
   leaves gaps in run ids).
 - Dashboard: `npm run web` starts Vite on 127.0.0.1:5173 with `/api` proxied to the API.
@@ -218,7 +218,9 @@ changes before running, or the connector will not see them.
   Runs, Run detail (filters by environment, severity, representation; warnings; failed run's
   error), Rules (enabled toggle via PATCH). Error states cover API not running (Vite answers
   502/504, mapped to ApiUnreachableError), no runs yet, and a FAILED run. Only react and
-  react-dom are runtime dependencies; routing is a hand-written hash router.
+  react-dom are runtime dependencies; routing is a hand-written hash router. The fetch client
+  sends Content-Type: application/json only on requests with a body (a bodiless POST with that
+  header is rejected by Fastify with 400). Dates are shown as dd/mm/yyyy, HH:MM:SS.
 - The API and dashboard never write to Git or the cluster; the only writes are the platform's
   own database rows (runs, findings, a rule's enabled flag).
 - Drift scenario verified through the dashboard's proxy on 16 November 2026: production scaled

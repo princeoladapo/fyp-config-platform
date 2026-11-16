@@ -67,9 +67,13 @@ export function ErrorState({ error, retry }: { error: unknown; retry?: () => voi
   );
 }
 
+// Day/month/year and 24-hour time in the browser's local time zone, e.g. 16/11/2026, 14:51:06.
 export function formatDateTime(iso: string | null): string {
   if (!iso) return '-';
-  return new Date(iso).toLocaleString();
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}, ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 export function formatDuration(ms: number | null): string {
