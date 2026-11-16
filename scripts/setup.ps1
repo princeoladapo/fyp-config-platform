@@ -5,9 +5,9 @@
 .DESCRIPTION
   Checks the prerequisites, creates the kind cluster, loads the application
   images, applies the sample manifests and the read-only RBAC, creates the
-  fyp-readonly kubeconfig context, starts PostgreSQL, installs packages,
-  applies the database migrations, seeds the rules and environments, and
-  runs the demo.
+  fyp-readonly kubeconfig context, starts PostgreSQL, installs the platform
+  and dashboard packages, applies the database migrations, seeds the rules
+  and environments, and runs the demo.
 
   Safe to re-run: every step checks what already exists and skips or repeats
   harmlessly. If the script stops, fix the problem it names and run it again.
@@ -358,7 +358,10 @@ if ($dbHost -notin @('localhost', '127.0.0.1')) {
 Write-Step 8 'Installing Node packages (npm ci)'
 # npm ci installs exactly what package-lock.json lists and never changes it.
 Invoke-Checked 'npm ci' { npm ci --no-audit --no-fund }
-Write-Ok 'Packages installed.'
+Write-Ok 'Platform packages installed.'
+# The dashboard (web/) is a separate npm project with its own lock file.
+Invoke-Checked 'npm ci (web)' { npm ci --prefix web --no-audit --no-fund }
+Write-Ok 'Dashboard packages installed.'
 
 # ---------------------------------------------------------------- 9. Prisma
 
@@ -391,5 +394,6 @@ if (-not ($output -contains 'CONSISTENT: no violations found.')) {
 Write-Host ''
 Write-Host 'SETUP COMPLETE: the demo reports zero findings.' -ForegroundColor Green
 Write-Host "Run the demo any time with: npx tsx src/demo.ts"
+Write-Host "Start the reporting API with: npm run api   (then, in another window) the dashboard with: npm run web"
 Pop-Location
 exit 0

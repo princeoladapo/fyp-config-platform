@@ -2,7 +2,8 @@
 
 This guide starts from a Windows 11 machine with nothing installed. At the end you will have
 the same environment as the rest of the team: a local Kubernetes cluster with the development,
-staging and production namespaces, a PostgreSQL database, and a demo that reports zero findings.
+staging and production namespaces, a PostgreSQL database, a demo that reports zero findings,
+and the reporting API and dashboard ready to start.
 
 All commands are for **Command Prompt** (search for "cmd" in the Start menu). Where a step needs
 an **administrator** Command Prompt, it says so: right-click "Command Prompt" and choose
@@ -105,12 +106,13 @@ The script takes 5 to 15 minutes the first time. It works through ten steps:
 6. creates a 30-day token for that account and a kubeconfig context called `fyp-readonly`
 7. creates `.env` with a random database password (if it does not exist yet) and starts
    PostgreSQL in a Docker container called `fyp-postgres`
-8. installs the Node packages with `npm ci`
+8. installs the Node packages with `npm ci`, for the platform and for the dashboard in `web/`
 9. applies the database migrations with Prisma, then seeds the database: the rules from
    `rules/rules.yaml` and the environments from `config/environments.yaml`
 10. runs the demo and checks that it reports zero findings
 
-It ends with **SETUP COMPLETE: the demo reports zero findings.**
+It ends with **SETUP COMPLETE: the demo reports zero findings.** and tells you how to start
+the API and the dashboard (section 4).
 
 If it stops, it prints **SETUP STOPPED** and the reason. Fix that and run the same command
 again: the script checks what already exists, so finished steps are skipped or repeated
@@ -189,6 +191,36 @@ To check every endpoint (this performs one real validation run):
 ```
 npm run test:api
 ```
+
+### Dashboard
+
+The dashboard is a small React application in the `web/` folder. It needs the API, so open
+two Command Prompt windows in the project folder. In the first:
+
+```
+npm run api
+```
+
+In the second:
+
+```
+npm run web
+```
+
+Then open `http://127.0.0.1:5173` in a browser. The dashboard has four pages:
+
+- **Overview**: the latest run, its findings counted by severity, and a "Run validation"
+  button that performs a run and shows the result.
+- **Runs**: every stored run, newest first.
+- **Run detail** (click a run): its details, warnings, and a findings table that can be
+  filtered by environment, severity and representation (declared in Git, or live in the
+  cluster), with the expected and observed values.
+- **Rules**: every rule with its kind, severity and description, and a switch to turn it
+  off or on. A rule that is off is skipped by the next run.
+
+If the page says it cannot reach the API, the first window is not running `npm run api`.
+Both the dashboard and the API listen on 127.0.0.1 only. Press Ctrl+C in each window to
+stop them.
 
 The platform reads the manifests that are **committed** in Git, not unsaved edits. Commit a
 manifest change before running the demo, or it will not be seen.

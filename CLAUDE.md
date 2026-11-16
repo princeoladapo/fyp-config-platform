@@ -36,7 +36,8 @@ which representation it was observed in.
   4. Rules stored in the database (DONE)
   5. Reporting interface and persistence of findings, in two parts:
      5a. Runs and findings stored, environment mapping in the database (DONE)
-     5b. Reporting interface (API) over stored runs (NEXT)
+     5b. Reporting interface: HTTP API and React dashboard over stored runs (DONE)
+  All five increments are complete. Remaining work is evaluation (3.8) and the report.
 - 3.6.2 Environment mapping: one Git directory per environment, paired with the namespace of the
   same name. Runs read it from the database `environments` table (git_directory,
   k8s_namespace); the `environments:` list in config/environments.yaml is only the seed source.
@@ -69,7 +70,16 @@ src/db.ts                      createPrismaClient(): PrismaClient + PrismaPg ada
 src/rules/ruleKind.ts          ruleKindOf(condition): FIXED_CONDITION / SAME_VALUE / RELATIONSHIP
 src/rules/ruleRepository.ts    loadEnabledRules(prisma) -> RuleDefinition[], validates each rule first
 src/environments/environmentRepository.ts  loadEnvironments(prisma): mapping from the database, ordered by id
-src/runs/runService.ts         executeRun(prisma): stores a run and its findings; loadRunFindings(prisma, id)
+src/runs/runService.ts         executeRun(prisma): stores a run and its findings; loadRunFindings(prisma, id);
+                               markStaleRuns(prisma): RUNNING rows older than 5 minutes become FAILED
+src/api/server.ts              buildServer(prisma) -> Fastify app; `npm run api` listens on 127.0.0.1:3000
+src/api/views.ts               JSON shapes the API returns (run summary/detail, finding, rule, environment)
+src/api/server.test.ts         `npm run test:api`: node:test + fastify.inject over every endpoint
+web/                           React dashboard (Vite + React 19 + TypeScript, plain CSS, own package.json)
+web/vite.config.ts             dev server on 127.0.0.1:5173, proxies /api to the API
+web/src/api.ts                 typed fetch client; ApiUnreachableError when the API is not running
+web/src/router.ts              hash router (#/, #/runs, #/runs/:id, #/rules); no react-router
+web/src/pages/*.tsx            Overview, Runs, RunDetail, Rules
 src/runs/formatFindings.ts     findings -> printable lines (shared by demo and runs CLI)
 src/rulesCli.ts                rules CLI: list | enable <name> | disable <name>
 src/runsCli.ts                 runs CLI: list | show <id>
@@ -88,12 +98,19 @@ tsconfig.json                  strict type checking only; tsx runs the code
 ```
 
 Run the demo with: `npx tsx src/demo.ts`. It prints "Loaded N rules from the database" (5 on the
-baseline) and the stored run number. Baseline: **zero findings** (declared and live both match
+baseline), any warnings, and the stored run number. Baseline: **zero findings** (declared and live both match
 the sample manifests), stored as a CONSISTENT run in about 0.5 s (the whole command takes longer
 because of tsx start-up). Any finding now means drift was introduced. List stored runs with
 `npx tsx src/runsCli.ts list`, and see one with `show <id>`.
 
-Type check with: `npx tsc --noEmit` (should report nothing).
+Type check with: `npx tsc --noEmit` (should report nothing); the dashboard with
+`npm run typecheck:web` (or `npm run web:build`, which type checks then builds).
+
+Kubernetes connector errors read "Could not read live configuration from context <ctx>,
+namespace <ns>: HTTP <code> <API server message>" (or the connection error when Docker is down).
+The Git connector returns warnings (an environment directory with no committed YAML) instead
+of printing them; executeRun stores them in `validation_runs.warnings` (nullable text[],
+migration `add_run_warnings`; Prisma reads NULL as []). `runsCli show` and the demo print them.
 
 Kubernetes connector details: it restores the `kind` field that list responses omit, skips the
 auto-created `kube-root-ca.crt` ConfigMap, and keeps server-defaulted fields (strategy,
@@ -141,8 +158,9 @@ changes before running, or the connector will not see them.
   manifests and RBAC, renews the token and `fyp-readonly` context, starts PostgreSQL, runs
   `npm ci`, `prisma migrate deploy` and `prisma db seed`, and checks the demo reports zero
   findings. Safe to re-run.
-  Tested from a fresh clone on 4 November 2026 (about 7 minutes from scratch). SETUP.md is the
-  guide for a new Windows 11 machine.
+  Step 8 also runs `npm ci --prefix web` for the dashboard. Tested from a fresh clone on
+  4 November 2026 (about 7 minutes from scratch) and re-run on 16 November 2026. SETUP.md is
+  the guide for a new Windows 11 machine, including how to start the API and dashboard.
 - PostgreSQL in Docker container `fyp-postgres`, database `fyp_config_platform`, port 5432.
   Connection string is in `.env` (DATABASE_URL).
 - If Docker Desktop was closed, start it first; the cluster and database run inside it.
@@ -157,14 +175,15 @@ changes before running, or the connector will not see them.
   `--config` flag is needed.
 - Stay on Prisma 7. Do not upgrade to Prisma 8 (release candidate, breaking changes).
 - Tables: environments, rules, validation_runs, findings. Migrations `init`, `drop_templates`,
-  `add_rule_kind_and_description` and `store_runs_and_environment_mapping` applied. Every finding
+  `add_rule_kind_and_description`, `store_runs_and_environment_mapping` and `add_run_warnings`
+  applied. Every finding
   references a rule (`findings.rule_id` is required); `findings.run_id` is indexed.
 - Keep the existing names (they match the report's design): environments.git_directory and
   k8s_namespace, validation_runs.completed_at, RunStatus RUNNING / CONSISTENT / VIOLATIONS_FOUND /
   FAILED. A finished run is CONSISTENT when finding_count is 0, otherwise VIOLATIONS_FOUND.
 - `validation_runs` also stores duration_ms, git_ref (as configured, e.g. HEAD), git_commit (the SHA
   resolved at the start; manifests are read at that SHA), kube_context, declared_record_count,
-  live_record_count, rules_checked, finding_count and error_message. Counts stay null until that
+  live_record_count, rules_checked, finding_count, error_message and warnings. Counts stay null until that
   stage finishes, so a FAILED run shows how far it got. Findings and the finished run are written
   in one transaction. Platform settings are read before the run row is created (git_ref is
   required), so a missing or broken config/environments.yaml fails without storing a run.
@@ -179,17 +198,43 @@ changes before running, or the connector will not see them.
   does not name two different known environments, a SAME_VALUE rule with exactly one environment.
 - `generated/prisma` is git-ignored: run `npx prisma generate` after changing the schema.
 
-## Next step: increment 5b, reporting interface
+## Reporting interface (increment 5b, done)
 
-- An HTTP API (fastify is already a dependency) over stored runs: list runs, show one run with its
-  findings, and start a run by calling `executeRun(prisma)` from src/runs/runService.ts (it does
-  not print, and throws RunFailedError carrying the stored run id).
-- The 3.8 drift-injection scenarios can be run against the zero-finding baseline: change a
-  manifest (declared) or the cluster (live, using the admin context), run the demo, record
-  what is detected, then restore the baseline. Verified for 5a: scaling production to 1 replica
-  stores a VIOLATIONS_FOUND run with exactly two findings, HIGH production-minimum-replicas
-  (rule 1) and MEDIUM production-replicas-not-below-staging (rule 3), both production / LIVE.
-  An invalid rule in the database stores a FAILED run with the validation error.
+- API: `npm run api` starts Fastify on **127.0.0.1:3000 only** (single local user, no login;
+  `API_PORT` overrides the port). Endpoints: GET /api/health, GET /api/environments,
+  GET /api/rules, PATCH /api/rules/:name {enabled}, GET /api/runs (newest first, findings
+  counted by severity), GET /api/runs/:id (warnings and findings with rule and environment
+  names), POST /api/runs (runs executeRun, 201 with the run detail; 500 with {error, run} when
+  the run is stored as FAILED; 409 while a RUNNING run exists). Errors are always
+  `{ "error": "..." }`: 400 for schema failures, 404 for unknown rule, run or route. Unknown body
+  fields are rejected (`removeAdditional: false`), not stripped. Before the 409 check, and at
+  the start of executeRun, `markStaleRuns` marks RUNNING rows older than 5 minutes as FAILED
+  ("Run did not finish (marked stale)") so a crashed run cannot block later ones.
+- Tests: `npm run test:api` (15 tests, fastify.inject, needs the database, Git and the
+  cluster; it performs one real run and cleans up the fake RUNNING rows it creates, which
+  leaves gaps in run ids).
+- Dashboard: `npm run web` starts Vite on 127.0.0.1:5173 with `/api` proxied to the API.
+  Pages: Overview (latest run, severity tiles, "Run validation" with progress and result),
+  Runs, Run detail (filters by environment, severity, representation; warnings; failed run's
+  error), Rules (enabled toggle via PATCH). Error states cover API not running (Vite answers
+  502/504, mapped to ApiUnreachableError), no runs yet, and a FAILED run. Only react and
+  react-dom are runtime dependencies; routing is a hand-written hash router.
+- The API and dashboard never write to Git or the cluster; the only writes are the platform's
+  own database rows (runs, findings, a rule's enabled flag).
+- Drift scenario verified through the dashboard's proxy on 16 November 2026: production scaled
+  to 1 replica gives a VIOLATIONS_FOUND run with two findings, HIGH production-minimum-replicas
+  and MEDIUM production-replicas-not-below-staging (both production / LIVE); with
+  production-minimum-replicas disabled only the MEDIUM finding remains; after restoring 3
+  replicas and the rule, the run is CONSISTENT.
+
+## Next step: evaluation (3.8)
+
+- Run the drift-injection scenarios against the zero-finding baseline: change a manifest
+  (declared) or the cluster (live, using the admin context), run from the dashboard or the
+  demo, record what is detected, then restore the baseline. Record detection rate,
+  false-positive rate on permitted differences (e.g. LOG_LEVEL), severity accuracy and run
+  time (target under 60 seconds; runs take about one second).
+- An invalid rule in the database stores a FAILED run with the validation error.
 
 ## Known housekeeping
 

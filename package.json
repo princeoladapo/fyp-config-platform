@@ -10,7 +10,10 @@
     "runs": "tsx src/runsCli.ts",
     "api": "tsx src/api/server.ts",
     "test:api": "tsx --test src/api/server.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "web": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "typecheck:web": "npm --prefix web run typecheck"
   },
   "keywords": [],
   "author": "",
